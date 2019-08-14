@@ -666,7 +666,7 @@ var graphPage = {
                         "generated_by": "graphspace-2.0.0",
                         "target_cytoscapejs_version": "~2.7",
                         "style": cyGraph_style_json,
-                        "legend": graphPage.legend.currentLegendJSON['legend']
+                        "legend": style_json['legend']
                     }
                 },
                 successCallback = function (response) {
@@ -687,6 +687,7 @@ var graphPage = {
                         type: 'danger'
                     });
                 });
+
         }
 
     },
@@ -2448,7 +2449,7 @@ var graphPage = {
             if(!('legend' in styleJSON)){
                 styleJSON['legend'] = {};
             }
-            graphPage.legend.currentLegendJSON['legend'] = styleJSON['legend'];
+            graphPage.legend.currentLegendJSON['legend'] = JSON.parse(JSON.stringify(styleJSON['legend']));
             graphPage.legend.cyLegend = graphPage.legend.constructLegend();
 
             $("#cyLegendContainer").draggable({ containment: "#cyGraphContainer", scroll: false});
@@ -2499,20 +2500,21 @@ var graphPage = {
                 });
             });
 
-            $("#legendBtn").click(function(e) {
+            $("#toggleLegendBtn").click(function(e) {
                 /*This function is called when user clicks either Hide Legend or Show Legend button available in the
                 * default sidebar.
                 * This function toggles the legend interface.
                 */
 
                 var legendContainer = document.getElementById("cyLegendContainer");
-                if (legendContainer.style.display === "none") {
+                if (legendContainer.style.zIndex == -1) {
+                    legendContainer.style.zIndex = 999
                     legendContainer.style.display = "block";
-                    document.getElementById("legendBtn").innerHTML = "Hide Legend";
+                    document.getElementById("toggleLegendBtn").innerHTML = "Hide Legend";
                 }
                 else {
-                    legendContainer.style.display = "none";
-                    document.getElementById("legendBtn").innerHTML = "Show Legend";
+                    legendContainer.style.zIndex = -1
+                    document.getElementById("toggleLegendBtn").innerHTML = "Show Legend";
                 }
                 graphPage.cyGraph.elements().unselect();
                 graphPage.legend.cyLegend.elements().unselect();
@@ -2531,8 +2533,16 @@ var graphPage = {
                         successCallback = function (response) {
                             var s = $("<select></select>").attr("id", 'selectLayoutDropdown').attr("name", 'selectLayoutDropdown');
                             _.each(response.layouts, function (layout) {
-                                $('<option />', {value: JSON.stringify(layout), text: layout.name}).appendTo(s);
+                                if(utils.getURLParameter('user_layout') == layout.id){
+                                    $('<option />', {value: JSON.stringify(layout), text: layout.name}).appendTo(s);
+                                }
                             });
+                            _.each(response.layouts, function (layout) {
+                                if(utils.getURLParameter('user_layout') != layout.id){
+                                    $('<option />', {value: JSON.stringify(layout), text: layout.name}).appendTo(s);
+                                }
+                            });
+                            $("#selectLayoutDropdown").val($("#target option:first").val());
                             s.appendTo('#userPrivateLayoutDropdown');
                         },
                         errorCallback = function () {
@@ -2653,6 +2663,58 @@ var graphPage = {
                 graphPage.legend.legendEditor.removeBinLegend();
                 graphPage.legend.legendEditor.removeEditLegend();
             });
+        },
+        exportNetworkWithLegend: function(fileformat){
+            var filename = $('#GraphName').val()
+            var canvas = document.getElementById('mycanvas');
+            var context = canvas.getContext('2d');
+            var img1 = new Image();
+            var img2 = new Image();
+
+            if (fileformat === 'png') {
+                var cyGraph_b64 = graphPage.cyGraph.png();
+                var cyLegend_b64 = graphPage.legend.cyLegend.png();
+                img1.onload = function() {
+                    canvas.width = img1.width;
+                    canvas.height = img1.height;
+                    img2.src = cyLegend_b64;
+                };
+                img2.onload = function() {
+                    context.globalAlpha = 1.0;
+                    context.drawImage(img1, 0, 0);
+                    context.globalAlpha = 1; //Remove if pngs have alpha
+                    context.drawImage(img2, 0, 0);
+                };
+                img1.src = cyGraph_b64;
+                var file  = canvas.toDataURL();
+                var link = $('<a>').attr('href', file).attr('download', filename + '.' + fileformat);
+                $('body').append(link);
+                console.log(link);
+                link.get(0).click();
+                link.get(0).remove();
+            }
+
+            if (fileformat === 'jpeg') {
+                var cyGraph_b64 = graphPage.cyGraph.jpeg();
+                var cyLegend_b64 = graphPage.legend.cyLegend.jpeg();
+                img1.onload = function() {
+                    canvas.width = img1.width;
+                    canvas.height = img1.height;
+                    img2.src = cyLegend_b64;
+                };
+                img2.onload = function() {
+                    context.globalAlpha = 1.0;
+                    context.drawImage(img1, 0, 0);
+                    context.globalAlpha = 1; //Remove if pngs have alpha
+                    context.drawImage(img2, 0, 0);
+                };
+                img1.src = cyGraph_b64;
+                var file  = canvas.toDataURL("image/jpeg");
+                var link = $('<a>').attr('href', file).attr('download', filename + '.' + fileformat);
+                $('body').append(link);
+                link.get(0).click();
+                link.get(0).remove();
+            }
         },
         checkGraphWithHtmlLegendFormat1: function(htmlLegendData){
             const HTML_LEGEND_TABLE_FORMAT_1 = 1;
@@ -2968,8 +3030,8 @@ var graphPage = {
         legendEditor: {
             init: function() {
                 // Check if legend interface is active or not. If not, activate it first.
-                if(document.getElementById("legendBtn").innerHTML == "Show Legend"){
-                    $('#legendBtn').trigger('click');
+                if(document.getElementById("toggleLegendBtn").innerHTML == "Show Legend"){
+                    $('#toggleLegendBtn').trigger('click');
                 }
 
                 graphPage.legend.resizeLegendInterfaceWidth('24%');
